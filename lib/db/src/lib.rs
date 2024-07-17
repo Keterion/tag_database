@@ -1,4 +1,6 @@
 #![allow(unused_variables, dead_code)]
+
+#[cfg(test)]
 mod tests;
 
 use rusqlite::{Connection, Result};
@@ -9,7 +11,7 @@ macro_rules! handle_unique {
             Ok(_) => Ok(1),
             Err(err) => match err.sqlite_error_code() {
                 Some(rusqlite::ErrorCode::ConstraintViolation) => {
-                    println!(
+                    log::warn!(
                         "ConstraintViolation\n{}\nfor\n{}\n",
                         err,
                         stringify!($command)
@@ -31,9 +33,79 @@ macro_rules! insert_ret_id {
         }
     };
 }
+//pub mod wrapper {
+//    use super::{Connection, tags, namespaces, images, utils, subtags};
+//    use log::error;
+//
+//    macro_rules! match_err {
+//        ($command:expr) => {
+//            match $command {
+//                Ok(thing) => {},
+//                Err(err) => {
+//                    error!("{}", err);
+//                }
+//            }
+//        };
+//    }
+//    pub struct Database {
+//        pub connection: Connection,
+//    }
+//    impl Database {
+//        pub fn new(conn: Connection) -> Database {
+//            env_logger::init();
+//            Database {
+//                connection: conn,
+//            }
+//        }
+//        pub fn add_tags(&mut self, tags: Vec<&str>) -> Vec<Option<i64>> {
+//            tags::add_tags(tags, &mut self.connection)
+//        }
+//        pub fn remove_tags(&self, tag_ids: Vec<i64>) -> Option<()> {
+//            match tags::remove_tags(tag_ids, &self.connection) {
+//                Ok(_) => Some(()),
+//                Err(err) => {
+//                    error!("{}", err);
+//                    None
+//                },
+//            }
+//        }
+//        pub fn rename_tag(&self, tag_id: i64, name: &str) {
+//            match_err!(tags::rename_tag(tag_id, name, &self.connection));
+//        }
+//        pub fn get_tag_name(&self, tag_id: i64) -> Option<String> {
+//            tags::get_name(tag_id, &self.connection)
+//        }
+//        pub fn remove_orphans(&self) {
+//            let tag_orphans = tags::get_orphans(&self.connection);
+//            let namespace_orphans = namespaces::get_orphans(&self.connection);
+//            let image_orphans = images::get_orphans(&self.connection);
+//
+//            for orphan in tag_orphans {
+//                match_err!(utils::remove_id(orphan.0, "tags", &self.connection));
+//            }
+//            for orphan in namespace_orphans {
+//                match_err!(utils::remove_id(orphan.0, "namespaces", &self.connection));
+//            }
+//            for orphan in image_orphans {
+//                match_err!(utils::remove_id(orphan.0, "images", &self.connection));
+//            }
+//        }
+//        pub fn set_tag_parent(&self, parent_id: i64, child_id: i64) {
+//            subtags::parent_tag(parent_id, child_id, &self.connection);
+//        }
+//        pub fn get_tag_parents(&self, tag_id: i64) -> Vec<i64> {
+//            subtags::get_parents(tag_id, &self.connection).unwrap()
+//        }
+//        pub fn get_tag_children(&self, tag_id: i64) -> Vec<i64> {
+//            subtags::get_children(tag_id, &self.connection).unwrap()
+//        }
+//        
+//    }
+//}
 pub mod utils {
     use super::{Connection, Result};
-
+    
+    /// returns either id or none of table with matching query
     pub fn get_id(table: &str, query: &str, conn: &Connection) -> Option<i64> {
         let mut stmt = conn
             .prepare(&format!("SELECT id FROM {} WHERE {}", table, query))
@@ -43,6 +115,7 @@ pub mod utils {
             Err(_) => None,
         }
     }
+    /// removes the row with matching id in the specified table
     pub fn remove_id(id: i64, table: &str, conn: &Connection) -> Result<()> {
         conn.execute(&format!("DELETE FROM {} WHERE id=?1", table), [id])?;
         Ok(())
@@ -50,7 +123,7 @@ pub mod utils {
 }
 pub mod tags {
     use super::{subtags, tags, utils, Connection, Result};
-
+    /// adds tag to image, if create is true nonexistent tags will get created
     pub fn add_tag_to_img(tag: &str, img: i64, create: bool, conn: &Connection) -> Result<()> {
         let mut insert = conn.prepare("INSERT INTO tag_map(img_id, tag_id) VALUES (?1, ?2)")?;
         // primary tag
@@ -76,17 +149,20 @@ pub mod tags {
         }
         Ok(())
     }
+    /// removes given tag from given image
     pub fn remove_tag_from_img(tag_id: i64, img_id: i64, conn: &Connection) -> Result<()> {
         let mut rem = conn.prepare("DELETE FROM tag_map WHERE tag_id=?1 AND img_id=?2")?;
         rem.execute([tag_id, img_id])?;
         Ok(())
     }
+    /// Adds tag into the tags table and returns id if successful
     pub fn add_tag(tag: &str, conn: &Connection) -> Option<i64> {
         insert_ret_id!(
             conn.execute("INSERT INTO tags(name) VALUES (?1)", [tag]),
             &conn
         )
     }
+    /// Adds multiple tags and return a vector of None and Some(id) values
     pub fn add_tags(tags: Vec<&str>, conn: &mut Connection) -> Vec<Option<i64>> {
         let mut ids: Vec<Option<i64>> = Vec::new();
         let mut stmt = conn.prepare("INSERT INTO tags(name) VALUES (?1)").unwrap();
@@ -95,16 +171,20 @@ pub mod tags {
         }
         ids
     }
-    pub fn remove_tag(tag: i64, conn: &Connection) -> Result<usize> {
-        conn.execute("DELETE FROM tags WHERE id=?1", [tag])
+    /// Deletes given tag from the tags table, all rows which use the tag also get deleted
+    pub fn remove_tag(tag: i64, conn: &Connection) -> Result<()> {
+        conn.execute("DELETE FROM tags WHERE id=?1", [tag])?;
         // doesn't need any other stuff because of the ON DELETE CASCADE action
+        Ok(())
     }
+    /// Deletes all tags, delete cascades to all connected rows
     pub fn remove_tags(tags: Vec<i64>, conn: &Connection) -> Result<()> {
         for tag in tags {
             remove_tag(tag, conn)?;
         }
         Ok(())
     }
+    /// Gets name of the given id or None
     pub fn get_name(tag_id: i64, conn: &Connection) -> Option<String> {
         let mut stmt = conn.prepare("SELECT name FROM tags WHERE id=?1").unwrap();
         match stmt.query_row([tag_id], |row| row.get(0)) {
@@ -112,6 +192,7 @@ pub mod tags {
             Err(_) => None,
         }
     }
+    /// Renames the tag
     pub fn rename_tag(tag_id: i64, new_name: &str, conn: &Connection) -> Result<()> {
         conn.execute(
             "UPDATE tags SET name=?1 WHERE id=?2",
@@ -119,6 +200,7 @@ pub mod tags {
         )?;
         Ok(())
     }
+    /// Gets all tags without connection to an image
     pub fn get_orphans(conn: &Connection) -> Vec<(i64, String)> {
         let mut stmt = conn.prepare("SELECT id, name FROM tags WHERE NOT EXISTS (SELECT id FROM tag_map WHERE tag_map.tag_id=tags.id)").unwrap();
         let mut res: Vec<(i64, String)> = Vec::new();
@@ -130,19 +212,35 @@ pub mod tags {
         }
         res
     }
+    pub fn get_tags_with(search_term: &str, conn: &Connection) -> Vec<(i64, String)> {
+        let mut stmt = conn.prepare("SELECT id, name FROM tags WHERE name IN ?1").unwrap();
+        let mut res: Vec<(i64, String)> = Vec::new();
+        for matching in stmt.query_map([search_term], |row| {
+            Ok((
+                    row.get(0).unwrap(),
+                    row.get(1).unwrap(),
+                    ))
+        }).unwrap() {
+            res.push(matching.unwrap());
+        }
+        res
+    }
 }
 pub mod images {
     use rusqlite::{Connection, Result};
+    /// Adds an image into the images table, returns id if successful
     pub fn add_image(path: &str, conn: &Connection) -> Option<i64> {
         insert_ret_id!(
             conn.execute("INSERT INTO images(path) VALUES (?1)", [path]),
             &conn
         )
     }
+    /// Removes an image from the images table via path, delete cascades
     pub fn remove_image_path(path: &str, conn: &Connection) -> Result<()> {
         conn.execute("DELETE FROM images WHERE path=?1", [path])?;
         Ok(())
     }
+    /// Gets all images which have a given tag
     pub fn get_images_with_tag(tag_id: i64, conn: &Connection) -> Result<Vec<(i64, String)>> {
         let mut stmt = conn.prepare(
             "SELECT (images.id, images.path)
@@ -160,6 +258,7 @@ pub mod images {
         }
         Ok(res)
     }
+    /// Returns a vector of tag ids and names which are linked with the given image
     pub fn get_tags_of_img(img_id: i64, conn: &Connection) -> Vec<(i64, String)> {
         let mut stmt = conn
             .prepare(
@@ -179,6 +278,7 @@ pub mod images {
         }
         res
     }
+    /// Gets the path of the given image id or None
     pub fn get_path(img_id: i64, conn: &Connection) -> Option<String> {
         let mut stmt = conn.prepare("SELECT path FROM images WHERE id=?1").unwrap();
         match stmt.query_row([img_id], |row| row.get(0)) {
@@ -186,6 +286,7 @@ pub mod images {
             Err(_) => None,
         }
     }
+    /// Updates the path of a given image id with a new one
     pub fn update_path(id: i64, new_path: &str, conn: &Connection) -> Result<()> {
         conn.execute(
             "UPDATE images SET path=?1 WHERE id=?2",
@@ -193,6 +294,7 @@ pub mod images {
         )?;
         Ok(())
     }
+    /// Returns a vector of image ids and paths which aren't connected to any tags
     pub fn get_orphans(conn: &Connection) -> Vec<(i64, String)> {
         let mut stmt = conn
             .prepare(
@@ -219,6 +321,8 @@ pub mod images {
 }
 pub mod subtags {
     use super::{utils, Connection, Result};
+    /// Gets all results of a query with a given variable as well as the results of the query with
+    /// the results
     macro_rules! recurse {
         ($query:expr, $primary_id:expr) => {{
             let prim_ids = $query.query_map([$primary_id], |row| row.get(0)).unwrap();
@@ -240,14 +344,17 @@ pub mod subtags {
             Ok(total)
         }};
     }
+    /// Gets all parents of a tag
     pub fn get_parents(child_id: i64, conn: &Connection) -> Result<Vec<i64>> {
         let mut stmt = conn.prepare("SELECT parent_id FROM subtag_map WHERE child_id=?1")?;
         recurse!(stmt, child_id)
     }
+    /// Gets all children of a tag
     pub fn get_children(parent_id: i64, conn: &Connection) -> Result<Vec<i64>> {
         let mut stmt = conn.prepare("SELECT child_id FROM subtag_map WHERE parent_id=?1")?;
         recurse!(stmt, parent_id)
     }
+    /// Sets a tag as parent of another tag, returns None if it fails
     pub fn parent_tag(parent_id: i64, child_id: i64, conn: &Connection) -> Option<()> {
         if Option::is_none(&utils::get_id(
             "subtag_map",
@@ -266,6 +373,7 @@ pub mod subtags {
         } // return None if there would be a loop created or the insert failed
         Some(())
     }
+    /// Deletes the connection between two tags
     pub fn remove_connection(tag1: &str, tag2: &str, conn: &Connection) -> Option<()> {
         let t1_id = match utils::get_id("tags", &format!("name='{}'", tag1), conn) {
             Some(id) => id,
@@ -291,12 +399,14 @@ pub mod subtags {
 }
 pub mod namespaces {
     use super::{Connection, Result};
+    /// Adds a namespace into the namespaces table, returns id if successful
     pub fn add_namespace(name: &str, conn: &Connection) -> Option<i64> {
         match handle_unique!(conn.execute("INSERT INTO namespaces(name) VALUES (?1)", [name])) {
             Ok(_) => Some(conn.last_insert_rowid()),
             Err(_) => None,
         }
     }
+    /// Changes namespace name of given namespace id
     pub fn rename_namespace(id: i64, new_name: &str, conn: &Connection) -> Result<()> {
         conn.execute(
             "UPDATE namespaces SET name=?1 WHERE id=?2",
@@ -304,6 +414,7 @@ pub mod namespaces {
         )?;
         Ok(())
     }
+    /// Adds a namespace to a tag, only one namespace per tag is allowed
     pub fn add_namespace_to_tag(namespace: i64, tag: i64, conn: &Connection) -> Result<()> {
         conn.execute(
             "INSERT INTO namespace_map(namespace_id, tag_id) VALUES (?1, ?2)",
@@ -311,14 +422,17 @@ pub mod namespaces {
         )?;
         Ok(())
     }
+    /// Removes namespace from tag, as there can only be one you don't need to specify it
     pub fn remove_namespace_from_tag(tag: i64, conn: &Connection) -> Result<()> {
         conn.execute("DELETE FROM namespace_map WHERE tag_id=?1", [tag])?;
         Ok(())
     }
+    /// Removes the namespace from the namespaces table, removing all associations
     pub fn remove_namespace(namespace_id: i64, conn: &Connection) -> Result<()> {
         conn.execute("DELETE FROM namespaces WHERE id=?1", [namespace_id])?;
         Ok(())
     }
+    /// Gets the namespace from a namespace id
     pub fn get_namespace_name(namespace_id: i64, conn: &Connection) -> Option<String> {
         let mut stmt = conn
             .prepare("SELECT (name) FROM namespaces WHERE id=?1")
@@ -328,6 +442,7 @@ pub mod namespaces {
             Err(_) => None,
         }
     }
+    /// Gets the namespace id associated with a tag
     pub fn get_namespace_of_tag(tag_id: i64, conn: &Connection) -> Option<i64> {
         let mut stmt = conn
             .prepare("SELECT namespace_id FROM namespace_map WHERE tag_id=?1")
@@ -337,6 +452,7 @@ pub mod namespaces {
             Err(err) => None,
         }
     }
+    /// Gets all of the tags connected with a namespace
     pub fn get_tags_with_namespace(namespace_id: i64, conn: &Connection) -> Vec<(i64, String)> {
         let mut stmt = conn
             .prepare(
@@ -358,6 +474,7 @@ pub mod namespaces {
         }
         res
     }
+    /// Gets all namespaces which aren't linked with any tag
     pub fn get_orphans(conn: &Connection) -> Vec<(i64, String)> {
         let mut stmt = conn
             .prepare(
@@ -384,6 +501,13 @@ pub mod namespaces {
 }
 pub mod init {
     use super::{Connection, Result};
+    pub fn recreate_db(path: std::path::PathBuf) -> Connection {
+        std::fs::remove_file(&path).unwrap();
+        let conn = Connection::open(path).unwrap();
+        init_tables(&conn).unwrap();
+        conn
+    }
+    /// creates the tables needed
     pub fn init_tables(conn: &Connection) -> Result<()> {
         conn.execute(
             "CREATE TABLE IF NOT EXISTS tags (

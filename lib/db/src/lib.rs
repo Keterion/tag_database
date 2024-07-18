@@ -213,9 +213,12 @@ pub mod tags {
         res
     }
     pub fn get_tags_with(search_term: &str, conn: &Connection) -> Vec<(i64, String)> {
-        let mut stmt = conn.prepare("SELECT id, name FROM tags WHERE name IN ?1").unwrap();
+        if search_term.len() < 1 {
+            return vec![];
+        }
+        let mut stmt = conn.prepare("SELECT id, name FROM tags WHERE name LIKE ?1").unwrap();
         let mut res: Vec<(i64, String)> = Vec::new();
-        for matching in stmt.query_map([search_term], |row| {
+        for matching in stmt.query_map([&format!("%{}%", search_term)], |row| {
             Ok((
                     row.get(0).unwrap(),
                     row.get(1).unwrap(),

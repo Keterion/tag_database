@@ -46,7 +46,7 @@ fn main() {
     let args = Args::parse();
     let mut conn = rusqlite::Connection::open(&args.path).unwrap();
     db::init::init_tables(&conn).unwrap();
-    db::tags::add_tags(vec!["a", "b", "c", "d"], &mut conn);
+    db::tags::add_tags(vec!["a", "b", "c", "d", "test", "abc", "alphabet", "xenomorph"], &mut conn);
     db::images::add_image("test.jpg", &conn);
     //db::tags::add_tag_to_img("a", 1, false, &conn);
 
@@ -72,8 +72,5 @@ fn main() {
                 }
             }
         },
-        _ => {
-            println!("Isn't a query");
-        }
     }
 }

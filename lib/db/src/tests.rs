@@ -1,5 +1,5 @@
-use rusqlite::Connection;
 use crate::*;
+use rusqlite::Connection;
 
 fn init_db() -> Connection {
     let conn = Connection::open_in_memory().unwrap();
@@ -22,7 +22,7 @@ mod util {
 
 #[cfg(test)]
 mod tag_tests {
-    use super::{tags, images, init_db};
+    use super::{images, init_db, tags};
     mod adding {
         use super::*;
         #[test]
@@ -120,7 +120,7 @@ mod tag_tests {
 
 #[cfg(test)]
 mod image_test {
-    use super::{init_db, images, tags};
+    use super::{images, init_db, tags};
     mod adding {
         use super::*;
         #[test]
@@ -227,10 +227,10 @@ mod image_test {
 
 #[cfg(test)]
 mod namespaces_and_parents {
-    use super::{init_db, utils, namespaces, tags, subtags};
+    use super::{init_db, namespaces, subtags, tags, utils};
 
     mod namespacing {
-        use super::{init_db, utils, namespaces, tags};
+        use super::{init_db, namespaces, tags, utils};
 
         mod adding {
             use super::*;
@@ -262,10 +262,7 @@ mod namespaces_and_parents {
                 let ns_id = namespaces::add_namespace("test", &conn).unwrap();
                 let t_id = tags::add_tag("testtag", &conn).unwrap();
                 namespaces::add_namespace_to_tag(ns_id, t_id, &conn).unwrap();
-                assert_eq!(
-                    namespaces::get_namespace_of_tag(t_id, &conn),
-                    Some(ns_id)
-                );
+                assert_eq!(namespaces::get_namespace_of_tag(t_id, &conn), Some(ns_id));
                 let _ = utils::remove_id(ns_id, "namespaces", &conn);
                 assert_eq!(namespaces::get_namespace_of_tag(t_id, &conn), None);
                 assert!(Option::is_none(&namespaces::get_namespace_name(
@@ -282,10 +279,7 @@ mod namespaces_and_parents {
                 let t_id = tags::add_tag("testtag", &conn).unwrap();
                 let ns_id = namespaces::add_namespace("test", &conn).unwrap();
                 namespaces::add_namespace_to_tag(ns_id, t_id, &conn).unwrap();
-                assert_eq!(
-                    namespaces::get_namespace_of_tag(t_id, &conn),
-                    Some(1)
-                );
+                assert_eq!(namespaces::get_namespace_of_tag(t_id, &conn), Some(1));
                 namespaces::remove_namespace_from_tag(t_id, &conn).unwrap();
                 assert_eq!(namespaces::get_namespace_of_tag(t_id, &conn), None);
             }
@@ -370,7 +364,7 @@ mod namespaces_and_parents {
         }
     }
     mod parents {
-        use super::{init_db, tags, subtags, utils};
+        use super::{init_db, subtags, tags, utils};
         mod adding {
             use super::*;
 

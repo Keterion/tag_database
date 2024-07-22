@@ -99,12 +99,12 @@ macro_rules! insert_ret_id {
 //        pub fn get_tag_children(&self, tag_id: i64) -> Vec<i64> {
 //            subtags::get_children(tag_id, &self.connection).unwrap()
 //        }
-//        
+//
 //    }
 //}
 pub mod utils {
     use super::{Connection, Result};
-    
+
     /// returns either id or none of table with matching query
     pub fn get_id(table: &str, query: &str, conn: &Connection) -> Option<i64> {
         let mut stmt = conn
@@ -216,14 +216,16 @@ pub mod tags {
         if search_term.len() < 1 {
             return vec![];
         }
-        let mut stmt = conn.prepare("SELECT id, name FROM tags WHERE name LIKE ?1").unwrap();
+        let mut stmt = conn
+            .prepare("SELECT id, name FROM tags WHERE name LIKE ?1")
+            .unwrap();
         let mut res: Vec<(i64, String)> = Vec::new();
-        for matching in stmt.query_map([&format!("%{}%", search_term)], |row| {
-            Ok((
-                    row.get(0).unwrap(),
-                    row.get(1).unwrap(),
-                    ))
-        }).unwrap() {
+        for matching in stmt
+            .query_map([&format!("%{}%", search_term)], |row| {
+                Ok((row.get(0).unwrap(), row.get(1).unwrap()))
+            })
+            .unwrap()
+        {
             res.push(matching.unwrap());
         }
         res

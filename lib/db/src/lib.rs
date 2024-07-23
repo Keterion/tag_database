@@ -345,7 +345,6 @@ pub mod images {
             }
         }
 
-        println!("{}", constructed);
         let mut stmt = conn.prepare(&constructed).unwrap();
         for image in stmt
             .query_map([], |row| Ok((row.get(0).unwrap(), row.get(1).unwrap())))

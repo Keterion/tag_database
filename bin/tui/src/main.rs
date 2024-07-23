@@ -20,8 +20,14 @@ enum InputMode {
 }
 
 enum CurrentlyViewing {
-    Search { search_type: ResultType },
-    Editing { table: String, entry: Result },
+    Search {
+        search_type: ResultType,
+    },
+    Editing {
+        table: String,
+        entry: Result,
+        options: SelectorList<EditOption>,
+    },
 }
 enum FocusedWidget {
     SearchBar,
@@ -37,25 +43,35 @@ struct App {
     currently_viewing: CurrentlyViewing,
     currently_focused: FocusedWidget,
 
-    results: ResultsList,
+    search_results: SelectorList<Result>,
+
+    connection: Connection,
 }
 
-struct ResultsList {
+struct SelectorList<T> {
     state: ListState,
-    items: Vec<Result>,
+    items: Vec<T>,
 }
+
 #[derive(Clone)]
 struct Result {
     name: String,
     id: i64,
     rtype: ResultType,
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum ResultType {
     Tag,
     Namespace,
     Image,
     Group,
+}
+
+enum EditOption {
+    Rename,
+    Delete,
+    AddTag,
+    RemoveTag,
 }
 
 impl Default for Result {
@@ -88,10 +104,11 @@ fn main() -> io::Result<()> {
             search_type: ResultType::Tag,
         },
         currently_focused: FocusedWidget::SearchBar,
-        results: ResultsList {
+        search_results: SelectorList {
             state: ListState::default(),
             items: vec![],
         },
+        connection: Connection::open("base.db").unwrap(),
     };
     let res = run_app(&mut terminal, app);
 
@@ -113,7 +130,9 @@ fn run_app(
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
     mut app: App,
 ) -> io::Result<()> {
-    let conn = Connection::open("base.db").unwrap();
+    //db::images::add_image("abc1.jpg", &conn);
+    //db::images::add_image("abc2.jpg", &conn);
+    //db::tags::add_tag_to_img("test", 1, true, &conn).unwrap();
     loop {
         terminal.draw(|f| ui(f, &mut app))?;
 
@@ -122,23 +141,89 @@ fn run_app(
                 CurrentlyViewing::Search { ref search_type } => {
                     match app.input_mode {
                         InputMode::View => match key.code {
-                            KeyCode::Char('i') => match app.currently_focused {
-                                FocusedWidget::SearchBar => {
-                                    app.input_mode = InputMode::Insert;
-                                }
-                                _ => {}
-                            },
                             KeyCode::Char('q') => {
                                 return Ok(());
                             }
+                            KeyCode::Char('i') => match app.currently_focused {
+                                FocusedWidget::SearchBar => {
+                                    app.currently_viewing = CurrentlyViewing::Search {
+                                        search_type: ResultType::Image,
+                                    }
+                                }
+                                _ => {}
+                            },
+                            KeyCode::Char('t') => match app.currently_focused {
+                                FocusedWidget::SearchBar => {
+                                    app.currently_viewing = CurrentlyViewing::Search {
+                                        search_type: ResultType::Tag,
+                                    };
+                                }
+                                _ => {}
+                            },
+                            KeyCode::Char('n') => match app.currently_focused {
+                                FocusedWidget::SearchBar => {
+                                    app.currently_viewing = CurrentlyViewing::Search {
+                                        search_type: ResultType::Namespace,
+                                    }
+                                }
+                                _ => {}
+                            },
+                            KeyCode::Char('g') => match app.currently_focused {
+                                FocusedWidget::SearchBar => {
+                                    app.currently_viewing = CurrentlyViewing::Search {
+                                        search_type: ResultType::Group,
+                                    }
+                                }
+                                _ => {}
+                            },
                             KeyCode::Char('e') => match app.currently_focused {
                                 FocusedWidget::Results => {
+                                    let (table, options) = match search_type {
+                                        ResultType::Tag => (
+                                            "tags".to_string(),
+                                            vec![EditOption::Rename, EditOption::Delete],
+                                        ),
+                                        ResultType::Image => (
+                                            "images".to_string(),
+                                            vec![
+                                                EditOption::Rename,
+                                                EditOption::Delete,
+                                                EditOption::AddTag,
+                                                EditOption::RemoveTag,
+                                            ],
+                                        ),
+                                        ResultType::Group => (
+                                            "groups".to_string(),
+                                            vec![
+                                                EditOption::Rename,
+                                                EditOption::Delete,
+                                                EditOption::AddTag,
+                                                EditOption::RemoveTag,
+                                            ],
+                                        ),
+                                        ResultType::Namespace => (
+                                            "namespaces".to_string(),
+                                            vec![
+                                                EditOption::Rename,
+                                                EditOption::Delete,
+                                                EditOption::AddTag,
+                                                EditOption::RemoveTag,
+                                            ],
+                                        ),
+                                    };
                                     app.currently_viewing = CurrentlyViewing::Editing {
-                                        table: "tags".to_string(),
-                                        entry: app.results.items
-                                            [app.results.state.selected().unwrap_or(0)]
+                                        table,
+                                        entry: app.search_results.items
+                                            [app.search_results.state.selected().unwrap_or(0)]
                                         .clone(),
+                                        options: SelectorList {
+                                            state: ListState::default(),
+                                            items: options,
+                                        },
                                     }
+                                }
+                                FocusedWidget::SearchBar => {
+                                    app.input_mode = InputMode::Insert;
                                 }
                                 _ => {}
                             },
@@ -148,27 +233,46 @@ fn run_app(
                                 }
                                 FocusedWidget::Results => {
                                     app.currently_focused = FocusedWidget::SearchBar
-                                }
+                                },
+                                _ => {},
                             },
                             KeyCode::Up => match app.currently_focused {
-                                FocusedWidget::Results => app.results.state.select_previous(),
+                                FocusedWidget::Results => {
+                                    app.search_results.state.select_previous()
+                                }
                                 _ => {}
                             },
                             KeyCode::Down => match app.currently_focused {
-                                FocusedWidget::Results => app.results.state.select_next(),
+                                FocusedWidget::Results => app.search_results.state.select_next(),
                                 _ => {}
                             },
                             _ => {}
                         },
                         InputMode::Insert => match key.code {
                             KeyCode::Enter => {
+                                match search_type {
+                                    ResultType::Image => {
+                                        app.search_results.items = db::images::query_sql(
+                                            app.search.value(),
+                                            &app.connection,
+                                        )
+                                        .iter()
+                                        .map(|image| Result {
+                                            id: image.0,
+                                            name: image.1.clone(),
+                                            rtype: ResultType::Image,
+                                        })
+                                        .collect();
+                                    }
+                                    _ => {}
+                                }
                                 app.search.reset();
                             }
                             KeyCode::Tab => {
                                 app.search.handle(tui_input::InputRequest::DeletePrevWord);
 
                                 for c in app
-                                    .results
+                                    .search_results
                                     .items
                                     .first()
                                     .unwrap_or(&Result::default())
@@ -185,22 +289,39 @@ fn run_app(
                                 app.search.handle_event(&Event::Key(key));
                                 // you could do a cool loading thing and wait for a thread to finish the
                                 // sql query
-                                let last_word = app.search.value().split(' ').last().unwrap_or("");
-                                app.results.items = db::tags::get_tags_with(last_word, &conn)
-                                    .iter()
-                                    .map(|tag| Result {
-                                        name: tag.1.clone(),
-                                        id: tag.0,
-                                        rtype: search_type.clone(),
-                                    })
-                                    .collect();
+                                match search_type {
+                                    ResultType::Tag => {
+                                        let last_word =
+                                            app.search.value().split(' ').last().unwrap_or("");
+                                        app.search_results.items =
+                                            db::tags::get_tags_with(last_word, &app.connection)
+                                                .iter()
+                                                .map(|tag| Result {
+                                                    name: tag.1.clone(),
+                                                    id: tag.0,
+                                                    rtype: search_type.clone(),
+                                                })
+                                                .collect();
+                                    }
+                                    _ => {}
+                                }
                             }
                         },
                     }
                 }
-                CurrentlyViewing::Editing { ref entry, .. } => match key.code {
+                CurrentlyViewing::Editing { ref entry, ref mut options, .. } => match key.code {
                     KeyCode::Char('q') => return Ok(()),
-                    KeyCode::Esc => app.currently_viewing = CurrentlyViewing::Search { search_type: entry.rtype.clone() },
+                    KeyCode::Up => {
+                        options.state.select_previous();
+                    },
+                    KeyCode::Down => {
+                        options.state.select_next();
+                    },
+                    KeyCode::Esc => {
+                        app.currently_viewing = CurrentlyViewing::Search {
+                            search_type: entry.rtype.clone(),
+                        }
+                    }
                     _ => {}
                 },
             }
@@ -237,8 +358,13 @@ mod tabs {
                     Span::raw("Press "),
                     Span::styled("q", Style::default().add_modifier(Modifier::BOLD)),
                     Span::raw(" to exit, "),
-                    Span::styled("i", Style::default().add_modifier(Modifier::BOLD)),
-                    Span::raw(" to insert into the query."),
+                    Span::styled("e", Style::default().add_modifier(Modifier::BOLD)),
+                    Span::raw(" to edit the query."),
+                    if let CurrentlyViewing::Search { search_type } = &app.currently_viewing {
+                        Span::raw(format!(" Searching for: {:?}s", search_type))
+                    } else {
+                        Span::raw("")
+                    },
                 ],
                 Style::default().add_modifier(Modifier::RAPID_BLINK),
             ),
@@ -285,7 +411,7 @@ mod tabs {
 
         let output =
             List::new(
-                app.results
+                app.search_results
                     .items
                     .iter()
                     .map(|line| &line.name[..])
@@ -298,11 +424,15 @@ mod tabs {
                     _ => Color::White,
                 },
             ));
-        f.render_stateful_widget(output, chunks[2], &mut app.results.state);
+        f.render_stateful_widget(output, chunks[2], &mut app.search_results.state);
     }
-    pub fn render_editing(f: &mut Frame, app: &App) {
-        let (table, entry) = match &app.currently_viewing {
-            CurrentlyViewing::Editing { table, entry } => (table, entry),
+    pub fn render_editing(f: &mut Frame, app: &mut App) {
+        let (table, entry, ref mut options) = match &mut app.currently_viewing {
+            CurrentlyViewing::Editing {
+                table,
+                entry,
+                ref mut options,
+            } => (table, entry, options),
             _ => return,
         };
         let outer_layout = Layout::default()
@@ -315,27 +445,41 @@ mod tabs {
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
             .split(outer_layout[1]);
 
-
         f.render_widget(
             Paragraph::new(format!("Editing entry '{}' in table {}", entry.name, table)),
             outer_layout[0],
         );
 
         f.render_widget(
-            Paragraph::new("")
-            .block(
-                Block::default()
-                .borders(Borders::ALL)
-                .title("Data")
-            ), inner_layout[0],
+            Paragraph::new(match entry.rtype {
+                ResultType::Tag => {
+                    format!("Name: {}\nId: {}", entry.name, entry.id)
+                }
+                ResultType::Image => {
+                    let mut res = String::new();
+                    res.push_str(&format!("Path: {}\nId: {}\nTags:\n", entry.name, entry.id));
+                    for tag in db::images::get_tags_of_img(entry.id, &app.connection) {
+                        res.push_str(&tag.1);
+                    }
+                    res
+                }
+                ResultType::Namespace => "".to_string(),
+                ResultType::Group => "".to_string(),
+            })
+            .block(Block::default().borders(Borders::ALL).title("Data")),
+            inner_layout[0],
         );
-        f.render_widget(
-            Paragraph::new("")
-            .block(
-                Block::default()
-                .borders(Borders::ALL)
-                .title("Options")
-            ), inner_layout[1],
+        f.render_stateful_widget(
+            List::new(options.items.iter().map(|opt| match opt {
+                EditOption::Rename => "Rename",
+                EditOption::Delete => "Delete",
+                EditOption::AddTag => "Add Tag",
+                EditOption::RemoveTag => "Remove Tag",
+            }))
+            .highlight_style(Color::Yellow)
+            .block(Block::default().borders(Borders::ALL).title("Options")),
+            inner_layout[1],
+            &mut options.state,
         );
     }
 }

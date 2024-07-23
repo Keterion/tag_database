@@ -323,6 +323,42 @@ pub mod images {
         }
         res
     }
+    pub fn query_sql(query: &str, conn: &Connection) -> Vec<(i64, String)> {
+        let tokens = query.split(" ");
+        let mut constructed = String::new();
+        let mut res: Vec<(i64, String)> = vec![];
+        constructed.push_str("SELECT img.id, img.path FROM images img ");
+        let mut tag_id: i64;
+
+        //let mut exclude: Vec<&str> = vec![];
+        let mut joins = 0;
+        for token in tokens {
+            //if token.starts_with('!') {
+            //    exclude.push(&token[1..]); // exclude the exclamation mark
+            //}
+            if let Some(id) = crate::utils::get_id("tags", &format!("name='{}'", token), conn) {
+                constructed.push_str(&format!(
+                    "JOIN tag_map t{} ON img.id = t{}.img_id AND t{}.tag_id = '{}'",
+                    joins, joins, joins, id
+                ));
+                joins += 1;
+            }
+        }
+
+        println!("{}", constructed);
+        let mut stmt = conn.prepare(&constructed).unwrap();
+        for image in stmt
+            .query_map([], |row| Ok((row.get(0).unwrap(), row.get(1).unwrap())))
+            .unwrap()
+        {
+            match image {
+                Ok(val) => res.push(val),
+                Err(err) => eprint!("{}", err),
+            }
+        }
+
+        res
+    }
 }
 pub mod subtags {
     use super::{utils, Connection, Result};

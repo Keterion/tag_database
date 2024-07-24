@@ -46,6 +46,13 @@ struct App {
     search_results: SelectorList<Result>,
 
     connection: Connection,
+    
+    user_input: Option<UserInput>,
+}
+struct UserInput {
+    wanted_by: EditOption,
+    influences: i64,
+    data: Input,
 }
 
 struct SelectorList<T> {
@@ -109,6 +116,7 @@ fn main() -> io::Result<()> {
             items: vec![],
         },
         connection: Connection::open("base.db").unwrap(),
+        user_input: None,
     };
     let res = run_app(&mut terminal, app);
 
@@ -309,7 +317,7 @@ fn run_app(
                         },
                     }
                 }
-                CurrentlyViewing::Editing { ref entry, ref mut options, .. } => match key.code {
+                CurrentlyViewing::Editing { ref entry, ref mut options, ref table } => match key.code {
                     KeyCode::Char('q') => return Ok(()),
                     KeyCode::Up => {
                         options.state.select_previous();
@@ -318,11 +326,45 @@ fn run_app(
                         options.state.select_next();
                     },
                     KeyCode::Esc => {
-                        app.currently_viewing = CurrentlyViewing::Search {
-                            search_type: entry.rtype.clone(),
+                        if let None = app.user_input {
+                            app.currently_viewing = CurrentlyViewing::Search {
+                                search_type: entry.rtype.clone(),
+                            }
+                        } // if the user tries to do an operation, they need to complete it
+                    },
+                    KeyCode::Enter => {
+                        if let Some(ref input) = app.user_input {
+                            match input.wanted_by {
+                                EditOption::Rename => {
+                                    match &table[..] {
+                                        "tags" => db::tags::rename_tag(input.influences, input.data.value(), &app.connection).unwrap(),
+                                        "images" => db::images::update_path(input.influences, input.data.value(), &app.connection).unwrap(),
+                                        "namespaces" => db::namespaces::rename_namespace(input.influences, input.data.value(), &app.connection).unwrap(),
+                                        "groups" => todo!(),
+                                        _ => {},
+                                    }
+                                },
+                                _ => {},
+                            }
+                            app.user_input = None;
+                        } else {
+                            match options.items[options.state.selected().unwrap()] {
+                                EditOption::Delete => {
+                                    db::utils::remove_id(entry.id, table, &app.connection).unwrap();
+                                },
+                                EditOption::Rename => {
+                                            app.user_input = Some(UserInput { wanted_by: EditOption::Rename, influences: entry.id, data: Input::default() });
+                                },
+                                EditOption::AddTag => {},
+                                EditOption::RemoveTag => {},
+                            }
                         }
                     }
-                    _ => {}
+                    _ => {
+                        if let Some(ref mut input) = app.user_input {
+                            input.data.handle_event(&Event::Key(key));
+                        }
+                    }
                 },
             }
         }
@@ -481,5 +523,26 @@ mod tabs {
             inner_layout[1],
             &mut options.state,
         );
+
+        if let Some(input) = &app.user_input {
+            let popup = Paragraph::new(input.data.value()).block(Block::default().borders(Borders::ALL).title("Input"));
+            let area = centered_rect(60, 20, f.size());
+            f.render_widget(Clear, area);
+            f.render_widget(popup, area);
+        }
     }
+}
+
+fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let popup_layout = Layout::vertical([
+        Constraint::Percentage((100 - percent_y) / 2),
+        Constraint::Percentage(percent_y),
+        Constraint::Percentage((100 - percent_y) / 2),
+    ]).split(r);
+    Layout::horizontal([
+        Constraint::Percentage((100 - percent_x) / 2),
+        Constraint::Percentage(percent_x),
+        Constraint::Percentage((100 - percent_x) / 2),
+    ])
+        .split(popup_layout[1])[1]
 }

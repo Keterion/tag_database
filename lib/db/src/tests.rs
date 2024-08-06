@@ -1,28 +1,28 @@
-use crate::*;
+use crate::methods::*;
 use rusqlite::Connection;
 
 fn init_db() -> Connection {
     let conn = Connection::open_in_memory().unwrap();
-    crate::init::init_tables(&conn).unwrap();
+    crate::methods::init::init_tables(&conn).unwrap();
     conn
 }
 
 #[cfg(test)]
 mod util {
-    use super::{init_db, tags};
+    use super::{init_db, tags, utils};
 
     #[test]
     fn remove_id() {
         let conn = init_db();
         let t_id = tags::add_tag("test", &conn).unwrap();
-        crate::utils::remove_id(t_id, "tags", &conn).unwrap();
+        utils::remove_id(t_id, "tags", &conn).unwrap();
         assert!(Option::is_none(&tags::get_name(t_id, &conn)));
     }
 }
 
 #[cfg(test)]
 mod tag_tests {
-    use super::{images, init_db, tags};
+    use super::{images, init_db, tags, utils};
     mod adding {
         use super::*;
         #[test]
@@ -62,7 +62,7 @@ mod tag_tests {
             let conn = init_db();
             let t_id = tags::add_tag("test", &conn).unwrap();
             tags::remove_tag(t_id, &conn).unwrap();
-            assert_eq!(None, crate::utils::get_id("tags", "name='test'", &conn));
+            assert_eq!(None, utils::get_id("tags", "name='test'", &conn));
         }
         #[test]
         fn delete_nonexistent_tag() {
@@ -76,7 +76,7 @@ mod tag_tests {
         fn get_tag_id() {
             let conn = init_db();
             tags::add_tag("test", &conn).unwrap();
-            assert_eq!(Some(1), crate::utils::get_id("tags", "name='test'", &conn));
+            assert_eq!(Some(1), utils::get_id("tags", "name='test'", &conn));
         }
         #[test]
         fn get_tag_name() {
@@ -120,7 +120,7 @@ mod tag_tests {
 
 #[cfg(test)]
 mod image_test {
-    use super::{images, init_db, tags};
+    use super::{images, init_db, tags, utils};
     mod adding {
         use super::*;
         #[test]
@@ -128,7 +128,7 @@ mod image_test {
             let conn = init_db();
             images::add_image("test.jpg", &conn).unwrap();
             assert_eq!(
-                crate::utils::get_id("images", "path='test.jpg'", &conn),
+                utils::get_id("images", "path='test.jpg'", &conn),
                 Some(1)
             );
         }
@@ -173,7 +173,7 @@ mod image_test {
             let _ = images::add_image("test.jpg", &conn);
             images::remove_image_path("test.jpg", &conn).unwrap();
             assert_eq!(
-                crate::utils::get_id("images", "path='test.jpg'", &conn),
+                utils::get_id("images", "path='test.jpg'", &conn),
                 None
             );
         }
@@ -202,7 +202,7 @@ mod image_test {
             let conn = init_db();
             let im_id = images::add_image("test.jpg", &conn).unwrap();
             assert_eq!(images::get_path(im_id, &conn), Some("test.jpg".to_owned()));
-            let _ = crate::utils::remove_id(im_id, "images", &conn);
+            let _ = utils::remove_id(im_id, "images", &conn);
             assert_eq!(images::get_path(im_id, &conn), None);
         }
         #[test]

@@ -1,6 +1,6 @@
 [workspace]
-
+resolver = "2"
 members = [
   "lib/*",
-  "bin/cli", "bin/tui",
+  "bin/cli", "bin/tui", "bin/tui_v2",
 ]

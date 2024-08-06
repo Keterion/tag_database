@@ -45,14 +45,15 @@ struct App {
 
     search_results: SelectorList<Result>,
 
-    connection: Connection,
-    
+    db_conn: Connection,
+
     user_input: Option<UserInput>,
 }
 struct UserInput {
-    wanted_by: EditOption,
-    influences: i64,
+    operation: EditOption,
+    target_id: i64,
     data: Input,
+    recommendations: Option<Vec<Result>>,
 }
 
 struct SelectorList<T> {
@@ -79,6 +80,7 @@ enum EditOption {
     Delete,
     AddTag,
     RemoveTag,
+    Confirm { confirm: bool },
 }
 
 impl Default for Result {
@@ -115,7 +117,7 @@ fn main() -> io::Result<()> {
             state: ListState::default(),
             items: vec![],
         },
-        connection: Connection::open("base.db").unwrap(),
+        db_conn: Connection::open("base.db").unwrap(),
         user_input: None,
     };
     let res = run_app(&mut terminal, app);
@@ -233,6 +235,7 @@ fn run_app(
                                 FocusedWidget::SearchBar => {
                                     app.input_mode = InputMode::Insert;
                                 }
+                                #[allow(unreachable_patterns)]
                                 _ => {}
                             },
                             KeyCode::Tab => match app.currently_focused {
@@ -241,8 +244,9 @@ fn run_app(
                                 }
                                 FocusedWidget::Results => {
                                     app.currently_focused = FocusedWidget::SearchBar
-                                },
-                                _ => {},
+                                }
+                                #[allow(unreachable_patterns)]
+                                _ => {}
                             },
                             KeyCode::Up => match app.currently_focused {
                                 FocusedWidget::Results => {
@@ -260,17 +264,15 @@ fn run_app(
                             KeyCode::Enter => {
                                 match search_type {
                                     ResultType::Image => {
-                                        app.search_results.items = db::images::query_sql(
-                                            app.search.value(),
-                                            &app.connection,
-                                        )
-                                        .iter()
-                                        .map(|image| Result {
-                                            id: image.0,
-                                            name: image.1.clone(),
-                                            rtype: ResultType::Image,
-                                        })
-                                        .collect();
+                                        app.search_results.items =
+                                            db::methods::images::query_sql(app.search.value(), &app.db_conn)
+                                                .iter()
+                                                .map(|image| Result {
+                                                    id: image.0,
+                                                    name: image.1.clone(),
+                                                    rtype: ResultType::Image,
+                                                })
+                                                .collect();
                                     }
                                     _ => {}
                                 }
@@ -302,7 +304,7 @@ fn run_app(
                                         let last_word =
                                             app.search.value().split(' ').last().unwrap_or("");
                                         app.search_results.items =
-                                            db::tags::get_tags_with(last_word, &app.connection)
+                                            db::methods::tags::get_tags_with(last_word, &app.db_conn)
                                                 .iter()
                                                 .map(|tag| Result {
                                                     name: tag.1.clone(),
@@ -317,52 +319,129 @@ fn run_app(
                         },
                     }
                 }
-                CurrentlyViewing::Editing { ref entry, ref mut options, ref table } => match key.code {
-                    KeyCode::Char('q') => return Ok(()),
+                CurrentlyViewing::Editing {
+                    ref entry,
+                    ref mut options,
+                    ref table,
+                } => match key.code {
+                    KeyCode::Char('q') => {
+                        if let None = app.user_input {
+                            return Ok(());
+                        }
+                    }
                     KeyCode::Up => {
                         options.state.select_previous();
-                    },
+                    }
                     KeyCode::Down => {
                         options.state.select_next();
-                    },
+                    }
                     KeyCode::Esc => {
                         if let None = app.user_input {
                             app.currently_viewing = CurrentlyViewing::Search {
                                 search_type: entry.rtype.clone(),
                             }
                         } // if the user tries to do an operation, they need to complete it
-                    },
+                    }
                     KeyCode::Enter => {
                         if let Some(ref input) = app.user_input {
-                            match input.wanted_by {
-                                EditOption::Rename => {
-                                    match &table[..] {
-                                        "tags" => db::tags::rename_tag(input.influences, input.data.value(), &app.connection).unwrap(),
-                                        "images" => db::images::update_path(input.influences, input.data.value(), &app.connection).unwrap(),
-                                        "namespaces" => db::namespaces::rename_namespace(input.influences, input.data.value(), &app.connection).unwrap(),
-                                        "groups" => todo!(),
-                                        _ => {},
-                                    }
+                            match input.operation {
+                                EditOption::Rename => match &table[..] {
+                                    "tags" => db::methods::tags::rename_tag(
+                                        input.target_id,
+                                        input.data.value(),
+                                        &app.db_conn,
+                                    )
+                                    .unwrap(),
+                                    "images" => db::methods::images::update_path(
+                                        input.target_id,
+                                        input.data.value(),
+                                        &app.db_conn,
+                                    )
+                                    .unwrap(),
+                                    "namespaces" => db::methods::namespaces::rename_namespace(
+                                        input.target_id,
+                                        input.data.value(),
+                                        &app.db_conn,
+                                    )
+                                    .unwrap(),
+                                    "groups" => todo!(),
+                                    _ => {}
                                 },
-                                _ => {},
+                                EditOption::AddTag => {
+                                    let res = match &table[..] {
+                                        "images" => {
+                                            db::methods::tags::add_tag_to_img(
+                                                input.data.value(), // tag
+                                                input.target_id,    // img
+                                                false,              // don't create tags
+                                                &app.db_conn,
+                                            )
+                                            //if let None = res {
+                                            //    // popup stuff because tag didn't exist here
+                                            //    app.user_input = Some(UserInput {
+                                            //        operation: EditOption::Confirm,
+                                            //        target_id = input.target_id,
+                                            //        data: Input::default(),
+                                            //        recommendations: vec!["y", "n"],
+                                            //    });
+                                        }
+                                        "namespaces" => None,
+                                        "groups" => None,
+                                        _ => None,
+                                    };
+                                    if let None = res {
+                                        println!("Error somewhere");
+                                    }
+                                }
+                                _ => {}
                             }
                             app.user_input = None;
                         } else {
                             match options.items[options.state.selected().unwrap()] {
                                 EditOption::Delete => {
-                                    db::utils::remove_id(entry.id, table, &app.connection).unwrap();
-                                },
+                                    db::methods::utils::remove_id(entry.id, table, &app.db_conn).unwrap();
+                                }
                                 EditOption::Rename => {
-                                            app.user_input = Some(UserInput { wanted_by: EditOption::Rename, influences: entry.id, data: Input::default() });
-                                },
-                                EditOption::AddTag => {},
-                                EditOption::RemoveTag => {},
+                                    app.user_input = Some(UserInput {
+                                        operation: EditOption::Rename,
+                                        target_id: entry.id,
+                                        data: Input::default(),
+                                        recommendations: None,
+                                    });
+                                }
+                                EditOption::AddTag => {
+                                    app.user_input = Some(UserInput {
+                                        operation: EditOption::AddTag,
+                                        target_id: entry.id,
+                                        data: Input::default(),
+                                        recommendations: Some(vec![]),
+                                    });
+                                }
+                                EditOption::RemoveTag => {}
+                                _ => {
+                                    unimplemented! {}
+                                }
                             }
                         }
                     }
                     _ => {
                         if let Some(ref mut input) = app.user_input {
                             input.data.handle_event(&Event::Key(key));
+                            if let Some(ref mut _recom) = input.recommendations {
+                                input.recommendations = match input.operation {
+                                    EditOption::AddTag => Some(
+                                        db::methods::tags::get_tags_with(input.data.value(), &app.db_conn)
+                                            .iter()
+                                            .map(|tag| Result {
+                                                name: tag.1.clone(),
+                                                id: tag.0,
+                                                rtype: ResultType::Tag,
+                                            })
+                                            .collect(),
+                                    ),
+                                    _ => None,
+                                }
+                            }
                         }
                     }
                 },
@@ -486,7 +565,6 @@ mod tabs {
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
             .split(outer_layout[1]);
-
         f.render_widget(
             Paragraph::new(format!("Editing entry '{}' in table {}", entry.name, table)),
             outer_layout[0],
@@ -500,7 +578,7 @@ mod tabs {
                 ResultType::Image => {
                     let mut res = String::new();
                     res.push_str(&format!("Path: {}\nId: {}\nTags:\n", entry.name, entry.id));
-                    for tag in db::images::get_tags_of_img(entry.id, &app.connection) {
+                    for tag in db::methods::images::get_tags_of_img(entry.id, &app.db_conn) {
                         res.push_str(&tag.1);
                     }
                     res
@@ -517,6 +595,9 @@ mod tabs {
                 EditOption::Delete => "Delete",
                 EditOption::AddTag => "Add Tag",
                 EditOption::RemoveTag => "Remove Tag",
+                _ => {
+                    unimplemented! {}
+                }
             }))
             .highlight_style(Color::Yellow)
             .block(Block::default().borders(Borders::ALL).title("Options")),
@@ -525,10 +606,27 @@ mod tabs {
         );
 
         if let Some(input) = &app.user_input {
-            let popup = Paragraph::new(input.data.value()).block(Block::default().borders(Borders::ALL).title("Input"));
-            let area = centered_rect(60, 20, f.size());
-            f.render_widget(Clear, area);
-            f.render_widget(popup, area);
+            let text = Paragraph::new(input.data.value())
+                .block(Block::default().borders(Borders::ALL).title("Input"));
+            let full_area = centered_rect(60, 20, f.size());
+            f.render_widget(Clear, full_area);
+
+            if let Some(ref recom) = input.recommendations {
+                let area =
+                    Layout::vertical([Constraint::Length(3), Constraint::Min(2)]).split(full_area);
+                f.render_widget(text, area[0]);
+                f.render_widget(
+                    List::new(
+                        recom
+                            .iter()
+                            .map(|line| &line.name[..])
+                            .collect::<Vec<&str>>(),
+                    ),
+                    area[1],
+                );
+            } else {
+                f.render_widget(text, full_area);
+            }
         }
     }
 }
@@ -538,11 +636,12 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
         Constraint::Percentage((100 - percent_y) / 2),
         Constraint::Percentage(percent_y),
         Constraint::Percentage((100 - percent_y) / 2),
-    ]).split(r);
+    ])
+    .split(r);
     Layout::horizontal([
         Constraint::Percentage((100 - percent_x) / 2),
         Constraint::Percentage(percent_x),
         Constraint::Percentage((100 - percent_x) / 2),
     ])
-        .split(popup_layout[1])[1]
+    .split(popup_layout[1])[1]
 }

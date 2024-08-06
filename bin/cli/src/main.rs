@@ -40,19 +40,19 @@ enum Target {
 fn main() {
     let args = Args::parse();
     let mut conn = rusqlite::Connection::open(&args.path).unwrap();
-    db::init::init_tables(&conn).unwrap();
-    db::tags::add_tags(
+    db::methods::init::init_tables(&conn).unwrap();
+    db::methods::tags::add_tags(
         vec!["a", "b", "c", "d", "test", "abc", "alphabet", "xenomorph"],
         &mut conn,
     );
-    db::images::add_image("test.jpg", &conn);
+    db::methods::images::add_image("test.jpg", &conn);
     //db::tags::add_tag_to_img("a", 1, false, &conn);
 
     match &args.cmd {
         Commands::Query { q } => match &q {
             Query::Tags { path } => {
-                let id = db::utils::get_id("images", &format!("path='{}'", path), &conn).unwrap();
-                let tags = db::images::get_tags_of_img(id, &conn);
+                let id = db::methods::utils::get_id("images", &format!("path='{}'", path), &conn).unwrap();
+                let tags = db::methods::images::get_tags_of_img(id, &conn);
                 for tag in tags {
                     println!("{}", tag.1);
                 }
@@ -63,7 +63,7 @@ fn main() {
         },
         Commands::Delete { t } => match &t {
             Target::All {} => {
-                db::init::recreate_db(std::path::PathBuf::from(args.path));
+                db::methods::init::recreate_db(std::path::PathBuf::from(args.path));
             }
         },
     }

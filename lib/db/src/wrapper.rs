@@ -38,14 +38,14 @@ impl Database {
     /// Create a database with a connection to the given path, also recreate the database fully
     pub fn create_db(path: &str) -> Self {
         Database {
-            db: methods::init::recreate_db(path.into())
+            db: methods::init::recreate_db(path.into()),
         }
     }
 }
 
 /// Tag methods for the database
 mod tags {
-    use super::methods::{tags, namespaces};
+    use super::methods::{namespaces, tags};
     impl super::Database {
         /// Create tags with the names from the given Vec<&str>
         pub fn create_tags(&mut self, tags: Vec<&str>) {
@@ -167,7 +167,11 @@ mod namespaces {
         }
         /// Adds a namespace to a tag, each tag can only have one namespace
         pub fn add_namespace_to_tag(&self, namespace_id: i64, tag_id: i64) -> Option<()> {
-            result_to_option!(namespaces::add_namespace_to_tag(namespace_id, tag_id, &self.db))
+            result_to_option!(namespaces::add_namespace_to_tag(
+                namespace_id,
+                tag_id,
+                &self.db
+            ))
         }
         /// Removes the namespace from a tag, each tag only has one namespace so no need to specify
         pub fn remove_namespace_from_tag(&self, tag_id: i64) -> Option<()> {

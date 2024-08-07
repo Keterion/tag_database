@@ -1,7 +1,7 @@
 use rusqlite::{Connection, Result};
 pub fn recreate_db(path: std::path::PathBuf) -> Connection {
     match std::fs::remove_file(&path) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(err) => eprintln!("Error removing file:\n{}", err),
     }
     if let Ok(conn) = Connection::open(path) {

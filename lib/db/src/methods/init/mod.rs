@@ -1,9 +1,15 @@
 use rusqlite::{Connection, Result};
 pub fn recreate_db(path: std::path::PathBuf) -> Connection {
-    std::fs::remove_file(&path).unwrap();
-    let conn = Connection::open(path).unwrap();
-    init_tables(&conn).unwrap();
-    conn
+    match std::fs::remove_file(&path) {
+        Ok(_) => {},
+        Err(err) => eprintln!("Error removing file:\n{}", err),
+    }
+    if let Ok(conn) = Connection::open(path) {
+        init_tables(&conn).unwrap();
+        conn
+    } else {
+        panic!("Failed to open database")
+    }
 }
 /// creates the tables needed
 pub fn init_tables(conn: &Connection) -> Result<()> {

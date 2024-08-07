@@ -264,15 +264,17 @@ fn run_app(
                             KeyCode::Enter => {
                                 match search_type {
                                     ResultType::Image => {
-                                        app.search_results.items =
-                                            db::methods::images::query_sql(app.search.value(), &app.db_conn)
-                                                .iter()
-                                                .map(|image| Result {
-                                                    id: image.0,
-                                                    name: image.1.clone(),
-                                                    rtype: ResultType::Image,
-                                                })
-                                                .collect();
+                                        app.search_results.items = db::methods::images::query_sql(
+                                            app.search.value(),
+                                            &app.db_conn,
+                                        )
+                                        .iter()
+                                        .map(|image| Result {
+                                            id: image.0,
+                                            name: image.1.clone(),
+                                            rtype: ResultType::Image,
+                                        })
+                                        .collect();
                                     }
                                     _ => {}
                                 }
@@ -304,14 +306,17 @@ fn run_app(
                                         let last_word =
                                             app.search.value().split(' ').last().unwrap_or("");
                                         app.search_results.items =
-                                            db::methods::tags::get_tags_with(last_word, &app.db_conn)
-                                                .iter()
-                                                .map(|tag| Result {
-                                                    name: tag.1.clone(),
-                                                    id: tag.0,
-                                                    rtype: search_type.clone(),
-                                                })
-                                                .collect();
+                                            db::methods::tags::get_tags_with(
+                                                last_word,
+                                                &app.db_conn,
+                                            )
+                                            .iter()
+                                            .map(|tag| Result {
+                                                name: tag.1.clone(),
+                                                id: tag.0,
+                                                rtype: search_type.clone(),
+                                            })
+                                            .collect();
                                     }
                                     _ => {}
                                 }
@@ -399,7 +404,8 @@ fn run_app(
                         } else {
                             match options.items[options.state.selected().unwrap()] {
                                 EditOption::Delete => {
-                                    db::methods::utils::remove_id(entry.id, table, &app.db_conn).unwrap();
+                                    db::methods::utils::remove_id(entry.id, table, &app.db_conn)
+                                        .unwrap();
                                 }
                                 EditOption::Rename => {
                                     app.user_input = Some(UserInput {
@@ -430,14 +436,17 @@ fn run_app(
                             if let Some(ref mut _recom) = input.recommendations {
                                 input.recommendations = match input.operation {
                                     EditOption::AddTag => Some(
-                                        db::methods::tags::get_tags_with(input.data.value(), &app.db_conn)
-                                            .iter()
-                                            .map(|tag| Result {
-                                                name: tag.1.clone(),
-                                                id: tag.0,
-                                                rtype: ResultType::Tag,
-                                            })
-                                            .collect(),
+                                        db::methods::tags::get_tags_with(
+                                            input.data.value(),
+                                            &app.db_conn,
+                                        )
+                                        .iter()
+                                        .map(|tag| Result {
+                                            name: tag.1.clone(),
+                                            id: tag.0,
+                                            rtype: ResultType::Tag,
+                                        })
+                                        .collect(),
                                     ),
                                     _ => None,
                                 }

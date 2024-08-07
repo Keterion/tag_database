@@ -53,24 +53,18 @@ pub fn parent_tag(parent_id: i64, child_id: i64, conn: &Connection) -> Option<()
     Some(())
 }
 /// Deletes the connection between two tags
-pub fn remove_connection(tag1: &str, tag2: &str, conn: &Connection) -> Option<()> {
-    let t1_id = match utils::get_id("tags", &format!("name='{}'", tag1), conn) {
-        Some(id) => id,
-        None => return None,
-    };
-    let t2_id = utils::get_id("tags", &format!("name='{}'", tag2), conn).unwrap();
-
+pub fn remove_connection(tag1: i64, tag2: i64, conn: &Connection) -> Option<()> {
     match conn.execute(
         "
                      DELETE FROM subtag_map
                      WHERE (parent_id=?1 AND child_id=?2)
                      OR (parent_id=?2 AND child_id=?1)
                      ",
-        [t1_id, t2_id],
+        [tag1, tag2],
     ) {
         Ok(_) => Some(()),
         Err(err) => {
-            println!("{}", err);
+            eprintln!("{}", err);
             None
         }
     }

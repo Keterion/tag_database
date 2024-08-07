@@ -1,3 +1,4 @@
+use db::wrapper::Database;
 fn main() {
-    println!("Hello, world!");
+    let db: Database = Database::open("base.db");
 }

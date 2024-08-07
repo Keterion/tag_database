@@ -6,5 +6,3 @@ mod tests;
 pub mod methods;
 
 pub mod wrapper;
-
-use rusqlite::{Connection, Result};

@@ -127,10 +127,7 @@ mod image_test {
         fn add_img() {
             let conn = init_db();
             images::add_image("test.jpg", &conn).unwrap();
-            assert_eq!(
-                utils::get_id("images", "path='test.jpg'", &conn),
-                Some(1)
-            );
+            assert_eq!(utils::get_id("images", "path='test.jpg'", &conn), Some(1));
         }
         #[test]
         fn add_img_twice() {
@@ -172,10 +169,7 @@ mod image_test {
             let conn = init_db();
             let _ = images::add_image("test.jpg", &conn);
             images::remove_image_path("test.jpg", &conn).unwrap();
-            assert_eq!(
-                utils::get_id("images", "path='test.jpg'", &conn),
-                None
-            );
+            assert_eq!(utils::get_id("images", "path='test.jpg'", &conn), None);
         }
     }
     mod getting {

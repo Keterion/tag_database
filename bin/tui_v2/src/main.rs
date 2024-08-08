@@ -1,3 +1,5 @@
+use std::io::stdout;
+
 use db::wrapper::Database;
 use ratatui::widgets;
 #[allow(unused_imports)]
@@ -45,6 +47,11 @@ impl App {
     }
     pub fn remove_widget(&mut self, index: usize) -> WidgetContainer {
         self.widgets.remove(index)
+    }
+    pub fn render_widgets(&mut self, f: &mut Frame) {
+        for widget in &self.widgets {
+            widget.render(f);
+        }
     }
 }
 impl Default for App {
@@ -95,6 +102,11 @@ impl WidgetContainer {
     pub fn get_position(&self) -> &Rect {
         &self.position
     }
+    pub fn render(&self, frame: &mut Frame) {
+        if self.show {
+            frame.render_widget(self.widget, self.position);
+        }
+    }
 }
 struct View {
     pub viewed_widgets: ViewedWidgets,
@@ -113,10 +125,50 @@ enum ViewedWidgets {
 
 
 fn main() {
+    // setup
+    enable_raw_mode().unwrap();
+    stdout().execute(EnterAlternateScreen).unwrap();
+    stdout().execute(EnableMouseCapture).unwrap();
+
+    let mut terminal = Terminal::new(CrosstermBackend::new(stdout())).unwrap();
+
     let app = App {
         db: Database::open("base.db"),
         ..Default::default()
     };
+
+    let res = run_app(&mut terminal, app);
+
+    disable_raw_mode().unwrap();
+    stdout().execute(LeaveAlternateScreen).unwrap();
+    stdout().execute(DisableMouseCapture).unwrap();
+    terminal.show_cursor().unwrap();
+
+    match res {
+        Ok(_) => {},
+        Err(err) => {
+            eprint!("App failed with:\n{}", err);
+        }
+    }
+
     // todo!()
     // base app rendering with a few widgets using the widgetcontainer system
+}
+fn run_app(
+    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+    mut app: App,
+    ) -> std::io::Result<()> {
+    loop {
+        terminal.draw(|frame| ui(frame, &mut app))?;
+    }
+}
+
+fn ui(frame: &mut Frame, app: &mut App) {
+    match app.view.viewed_widgets {
+        ViewedWidgets::Specific { toggled } => {
+            for w in toggled {
+                
+            }
+        }
+    }
 }

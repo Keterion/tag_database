@@ -16,50 +16,17 @@ use tui_input::{backend::crossterm::EventHandler, Input};
 
 struct App {
     db: Database,
-    widgets: Vec<WidgetContainer>,
+    pages: Vec<Page>,
     view: View,
     area: Rect,
 }
 impl App {
-    pub fn add_widget(&mut self, widget: WidgetContainer) -> usize {
-        self.widgets.push(widget);
-        self.widgets.len() - 1
+    pub fn add_page(&mut self, page: Page) {
+        self.pages.push(page);
     }
     pub fn focus_next(&mut self) {
-        if let Some(widget) = self.widgets.get(self.view.focused) {
-            self.view.focused = widget.next;
-        }
-    }
-    pub fn gen_layout(area: Rect, page_type: PageType) -> Rc<[Rect]> {
-        match page_type {
-            PageType::Result => {
-                Layout::new(
-                    Direction::Vertical, 
-                    [
-                        Constraint::Length(1),
-                        Constraint::Min(3),
-                    ].as_ref()
-                ).split(area)
-            },
-            PageType::Edit => {
-                let outer = Layout::new(
-                    Direction::Vertical,
-                    [
-                        Constraint::Length(1),
-                        Constraint::Min(3)
-                    ].as_ref()
-                    ).split(area);
-                let inner = Layout::new(
-                    Direction::Horizontal,
-                    [
-                        Constraint::Percentage(50),
-                                               Constraint::Percentage(50)
-                    ].as_ref()
-                    ).split(outer[1]);
-                Rc::new(
-                    [outer[0], inner[0], inner[1]]
-                )
-            },
+        if let Some(page) = self.pages.get_mut(self.view.focused) {
+            page.focus_next();
         }
     }
 }
@@ -67,11 +34,8 @@ impl Default for App {
     fn default() -> Self {
         App {
             db: Database::default(),
-            widgets: vec![],
-            view: View {
-                viewed_widgets: ViewedWidgets::Specific { toggled: vec![] },
-                focused: 0,
-            },
+            pages: vec![Page::default()],
+            view: View { focused: 0 },
             area: Rect::default(),
         }
     }
@@ -79,14 +43,131 @@ impl Default for App {
 enum PageType {
     Result,
     Edit,
+    Custom,
 }
 
 struct Page {
     widgets: Vec<WidgetContainer>,
     page_type: PageType,
+    focused_widget: usize,
     // todo!()
-    // implement pages to use instead of widgetcontainers in the app 
+    // implement pages to use instead of widgetcontainers in the app
     // yes yes
+}
+impl Default for Page {
+    fn default() -> Self {
+        Page {
+            widgets: vec![WidgetContainer::default()],
+            page_type: PageType::Custom,
+            focused_widget: 0,
+        }
+    }
+}
+impl Page {
+    pub fn focus_next(&mut self) {
+        if let Some(page) = self.widgets.get(self.focused_widget) {
+            self.focused_widget = page.next;
+        }
+    }
+    pub fn generate_page(page_type: PageType, area: Rect) -> Self {
+        match page_type {
+            PageType::Result => {
+                let layout = Layout::new(
+                    Direction::Vertical,
+                    [Constraint::Length(3), Constraint::Min(3)].as_ref(),
+                )
+                .split(area);
+                let mut widgets: Vec<WidgetContainer> = Vec::new();
+                widgets.push(WidgetContainer {
+                    widget_type: WidgetType::Input {
+                        input: Input::default(),
+                    },
+                    area: layout[0],
+                    styling: Style::default(),
+                    borders: Borders::ALL,
+                    group: "input_1".to_string(),
+                    next: 1,
+                });
+                widgets.push(WidgetContainer {
+                    widget_type: WidgetType::List {
+                        selector: true,
+                        list: vec![],
+                    },
+                    area: layout[1],
+                    styling: Style::default(),
+                    borders: Borders::ALL,
+                    group: "input_1".to_string(),
+                    next: 0,
+                });
+
+                Page {
+                    widgets,
+                    page_type,
+                    focused_widget: 0,
+                }
+            }
+            PageType::Edit => {
+                let outer = Layout::new(
+                    Direction::Vertical,
+                    [Constraint::Length(1), Constraint::Min(3)].as_ref(),
+                )
+                .split(area);
+                let inner = Layout::new(
+                    Direction::Horizontal,
+                    [Constraint::Percentage(50), Constraint::Percentage(50)].as_ref(),
+                )
+                .split(outer[1]);
+
+                let mut widgets: Vec<WidgetContainer> = Vec::new();
+                widgets.push(WidgetContainer {
+                    widget_type: WidgetType::Paragraph {
+                        text: "Edting".to_string(),
+                    },
+                    area: outer[0],
+                    styling: Style::default(),
+                    borders: Borders::NONE,
+                    group: "edit_1".to_string(),
+                    next: 2,
+                });
+                widgets.push(WidgetContainer {
+                    widget_type: WidgetType::List {
+                        selector: false,
+                        list: vec![],
+                    },
+                    area: inner[0],
+                    styling: Style::default(),
+                    borders: Borders::ALL,
+                    group: "edit_1".to_string(),
+                    next: 2,
+                });
+                widgets.push(WidgetContainer {
+                    widget_type: WidgetType::List {
+                        selector: true,
+                        list: vec![],
+                    },
+                    area: inner[1],
+                    styling: Style::default(),
+                    borders: Borders::ALL,
+                    group: "edit_1".to_string(),
+                    next: 2,
+                });
+                Page {
+                    widgets,
+                    page_type,
+                    focused_widget: 2,
+                }
+            }
+            PageType::Custom => Page::default(),
+        }
+    }
+    pub fn add_widget(&mut self, widget: WidgetContainer) {
+        self.widgets.push(widget);
+    }
+    pub fn render(&mut self, frame: &mut Frame) {
+        for widget in &mut self.widgets {
+            widget.render(frame);
+        }
+    }
 }
 struct WidgetContainer {
     widget_type: WidgetType,
@@ -121,7 +202,13 @@ impl WidgetContainer {
             ),
             WidgetType::List { selector, ref list } => {
                 if selector {
-                    frame.render_stateful_widget(List::new(list.iter().map(|line| &line[..])).block(Block::default().borders(self.borders)).style(self.styling), self.area, &mut ListState::default());
+                    frame.render_stateful_widget(
+                        List::new(list.iter().map(|line| &line[..]))
+                            .block(Block::default().borders(self.borders))
+                            .style(self.styling),
+                        self.area,
+                        &mut ListState::default(),
+                    );
                 } else {
                     frame.render_widget(
                         List::new(list.iter().map(|line| &line[..]))
@@ -152,14 +239,7 @@ enum WidgetType {
 }
 
 struct View {
-    pub viewed_widgets: ViewedWidgets,
     pub focused: usize,
-}
-enum ViewedWidgets {
-    /// Specific indices of widgets to be shown
-    Specific { toggled: Vec<usize> },
-    /// Group of widgets to be shown
-    Group { name: String },
 }
 
 fn main() {
@@ -188,96 +268,25 @@ fn main() {
             eprint!("App failed with:\n{}", err);
         }
     }
-
-    // todo!()
-    // base app rendering with a few widgets using the widgetcontainer system
 }
 fn run_app(
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
     mut app: App,
 ) -> std::io::Result<()> {
     terminal.draw(|f| ui(f, &mut app)).unwrap();
-        let layout = App::gen_layout(app.area, PageType::Result);
-        app.add_widget(WidgetContainer {
-            widget_type: WidgetType::Input { input: Input::default() },
-            area: layout[0],
-            styling: Style::default(),
-            borders: Borders::ALL,
-            group: "input_1".to_string(),
-            next: 1,
-        });
-        app.add_widget(WidgetContainer {
-            widget_type: WidgetType::List { selector: true, list: vec![] },
-            area: layout[1],
-            styling: Style::default(),
-            borders: Borders::ALL,
-            group: "input_1".to_string(),
-            next: 0,
-        });
-        let layout = App::gen_layout(app.area, PageType::Edit);
-        app.add_widget(
-            WidgetContainer {
-                widget_type: WidgetType::Paragraph { text: "Edting".to_string() },
-                area: layout[0],
-                styling: Style::default(),
-                borders: Borders::NONE,
-                group: "edit_1".to_string(),
-                next: 2,
-            }
-        );
-        app.add_widget(WidgetContainer {
-            widget_type: WidgetType::List { selector: false, list: vec![] },
-            area: layout[1],
-            styling: Style::default(),
-            borders: Borders::ALL,
-            group: "edit_1".to_string(),
-            next: 3,
-        });
-        app.add_widget(WidgetContainer {
-            widget_type: WidgetType::List { selector: true, list: vec![] },
-            area: layout[2],
-            styling: Style::default(),
-            borders: Borders::ALL,
-            group: "edit_1".to_string(),
-            next: 4,
-        });
-        drop(layout);
+    app.add_page(Page::generate_page(PageType::Result, app.area));
+    app.add_page(Page::generate_page(PageType::Edit, app.area));
     loop {
         terminal.draw(|frame| ui(frame, &mut app))?;
         if let Event::Key(key) = event::read().unwrap() {
             match key.code {
                 KeyCode::Char('q') => return Ok(()),
-                KeyCode::Char('a') => {
-                    app.add_widget(WidgetContainer {
-                        widget_type: WidgetType::Paragraph {
-                            text: "Hello World!".to_string(),
-                        },
-                        area: app.area,
-                        styling: Style::default().bold(),
-                        borders: Borders::ALL,
-                        ..Default::default()
-                    });
-                    app.view.viewed_widgets = ViewedWidgets::Specific { toggled: vec![0] };
-                },
-                KeyCode::Char('b') => {
-                    app.add_widget(WidgetContainer {
-                        widget_type: WidgetType::Paragraph {
-                            text: "Hello Second!".to_string(),
-                        },
-                        area: app.area,
-                        styling: Style::default(),
-                        borders: Borders::BOTTOM,
-                        group: "group_b".to_string(),
-                        ..Default::default()
-                    });
-                    app.view.viewed_widgets = ViewedWidgets::Group { name: "group_b".to_string() };
-                },
                 KeyCode::Char('e') => {
-                    app.view.viewed_widgets = ViewedWidgets::Group { name: "edit_1".to_string() };
-                },
+                    app.view.focused = 0;
+                }
                 KeyCode::Char('r') => {
-                    app.view.viewed_widgets = ViewedWidgets::Group { name: "input_1".to_string() };
-                },
+                    app.view.focused = 1;
+                }
                 _ => {}
             }
         }
@@ -286,20 +295,7 @@ fn run_app(
 
 fn ui(frame: &mut Frame, app: &mut App) {
     app.area = frame.area();
-    match &app.view.viewed_widgets {
-        ViewedWidgets::Specific { ref toggled } => {
-            for index in toggled {
-                if let Some(widget) = app.widgets.get_mut(*index) {
-                    widget.render(frame);
-                }
-            }
-        },
-        ViewedWidgets::Group { ref name } => {
-            for widget in &mut app.widgets {
-                if widget.part_of_group(name) {
-                    widget.render(frame);
-                }
-            }
-        },
+    if let Some(page) = app.pages.get_mut(app.view.focused) {
+        page.render(frame);
     }
 }

@@ -28,8 +28,23 @@ impl App {
         self.pages.push(page);
     }
     pub fn focus_next(&mut self) {
-        if let Some(page) = self.pages.get_mut(self.view.focused) {
-            page.focus_next();
+        match self.view.viewed_page {
+            SelectionType::Index { index } => {
+                if let Some(page) = self.pages.get_mut(index) {
+                    page.focus_next();
+                }
+
+            },
+            SelectionType::UID { uid } => {
+
+            }
+        }
+    }
+    pub fn get_page_with_uid(&self, uid: &str) -> Option<&Page> {
+        for page in self.pages {
+            if page.uid = uid {
+                return &page;
+            }
         }
     }
 }

@@ -11,6 +11,7 @@ pub struct Page {
     widgets: Vec<WidgetContainer>,
     page_type: PageType,
     focused_widget: usize,
+    uid: String,
     // todo!()
     // implement pages to use instead of widgetcontainers in the app
     // yes yes
@@ -21,6 +22,7 @@ impl Default for Page {
             widgets: vec![WidgetContainer::default()],
             page_type: PageType::Custom,
             focused_widget: 0,
+
         }
     }
 }
@@ -190,5 +192,13 @@ pub enum WidgetType {
 }
 
 pub struct View {
-    pub focused: usize,
+    pub viewed_page: SelectionType,
+}
+pub enum SelectionType {
+    Index {
+        index: usize
+    },
+    UID {
+        uid: String
+    }
 }

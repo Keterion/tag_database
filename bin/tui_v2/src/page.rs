@@ -11,18 +11,18 @@ pub struct Page {
     widgets: Vec<WidgetContainer>,
     page_type: PageType,
     focused_widget: usize,
-    uid: String,
-    // todo!()
+    pub uid: String,
+    // TODO
     // implement pages to use instead of widgetcontainers in the app
     // yes yes
 }
 impl Default for Page {
     fn default() -> Self {
         Page {
-            widgets: vec![WidgetContainer::default()],
-            page_type: PageType::Custom,
+            widgets: Vec::new(),
             focused_widget: 0,
-
+            page_type: PageType::Custom,
+            uid: random_string::generate(10, "abcdefghijklmnopqrstuvxyz"),
         }
     }
 }
@@ -32,7 +32,7 @@ impl Page {
             self.focused_widget = page.next;
         }
     }
-    pub fn generate_page(page_type: PageType, area: Rect) -> Self {
+    pub fn generate_page(page_type: PageType, area: Rect, uid: &str) -> Self {
         match page_type {
             PageType::Result => {
                 let layout = Layout::new(
@@ -65,6 +65,7 @@ impl Page {
                     widgets,
                     page_type,
                     focused_widget: 0,
+                    uid: random_string::generate(10, "abcdefghijklmnopqrstuvxyz"),
                 }
             }
             PageType::Edit => {
@@ -113,9 +114,15 @@ impl Page {
                     widgets,
                     page_type,
                     focused_widget: 2,
+                    uid: uid.to_string(),
                 }
             }
-            PageType::Custom => Page::default(),
+            PageType::Custom => Page {
+                focused_widget: 0,
+                page_type: PageType::Custom,
+                widgets: Vec::new(),
+                uid: random_string::generate(10, "abcdefghijklmnopqrstuvxyz"),
+            },
         }
     }
     pub fn add_widget(&mut self, widget: WidgetContainer) {
@@ -193,6 +200,7 @@ pub enum WidgetType {
 
 pub struct View {
     pub viewed_page: SelectionType,
+    pub focused: u32,
 }
 pub enum SelectionType {
     Index {

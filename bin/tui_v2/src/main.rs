@@ -1,4 +1,4 @@
-use std::{io::stdout};
+use std::io::stdout;
 
 mod page;
 use page::*;
@@ -28,9 +28,9 @@ impl App {
         self.pages.push(page);
     }
     pub fn focus_next(&mut self) {
-        match self.view.viewed_page {
-            SelectionType::Index { index } => {
-                if let Some(page) = self.pages.get_mut(index) {
+        match &self.view.viewed_page {
+            SelectionType::Index { ref index } => {
+                if let Some(page) = self.pages.get_mut(*index as usize) {
                     page.focus_next();
                 }
 
@@ -41,11 +41,12 @@ impl App {
         }
     }
     pub fn get_page_with_uid(&self, uid: &str) -> Option<&Page> {
-        for page in self.pages {
-            if page.uid = uid {
-                return &page;
+        for page in &self.pages {
+            if page.uid == uid {
+                return Some(&page);
             }
         }
+        None
     }
 }
 impl Default for App {
@@ -53,7 +54,12 @@ impl Default for App {
         App {
             db: Database::default(),
             pages: vec![Page::default()],
-            view: View { focused: 0 },
+            view: View {
+                viewed_page: SelectionType::UID {
+                    uid: "0".to_string()
+                },
+                focused: 0
+            },
             area: Rect::default(),
         }
     }
@@ -96,8 +102,8 @@ fn run_app(
     mut app: App,
 ) -> std::io::Result<()> {
     terminal.draw(|f| ui(f, &mut app)).unwrap();
-    app.add_page(Page::generate_page(PageType::Result, app.area));
-    app.add_page(Page::generate_page(PageType::Edit, app.area));
+    app.add_page(Page::generate_page(PageType::Result, app.area, "result1"));
+    app.add_page(Page::generate_page(PageType::Edit, app.area, "edit1"));
     loop {
         terminal.draw(|frame| ui(frame, &mut app))?;
         if let Event::Key(key) = event::read().unwrap() {
@@ -117,7 +123,7 @@ fn run_app(
 
 fn ui(frame: &mut Frame, app: &mut App) {
     app.area = frame.area();
-    if let Some(page) = app.pages.get_mut(app.view.focused) {
+    if let Some(page) = app.pages.get_mut(app.view.focused as usize) {
         page.render(frame);
     }
 }

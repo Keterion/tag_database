@@ -9,6 +9,7 @@ default-run = "tui_v2"
 [dependencies]
 crossterm = "0.28.1"
 db = { path = "../../lib/db" }
+random-string = "1.1.0"
 ratatui = "0.28.0"
 tui-input = "0.9.0"
 

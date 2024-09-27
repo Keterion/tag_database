@@ -18,6 +18,7 @@ use ratatui::{
 use tui_input::{backend::crossterm::EventHandler, Input};
 
 struct App {
+    #[allow(dead_code)]
     db: Database,
     pages: Vec<Page>,
     view: View,
@@ -28,25 +29,23 @@ impl App {
         self.pages.push(page);
     }
     pub fn focus_next(&mut self) {
-        match &self.view.viewed_page {
-            SelectionType::Index { ref index } => {
-                if let Some(page) = self.pages.get_mut(*index as usize) {
-                    page.focus_next();
-                }
-
-            },
-            SelectionType::UID { uid } => {
-
-            }
+        if let Some(page) = self.get_viewed_page() {
+            page.focus_next();
         }
     }
-    pub fn get_page_with_uid(&self, uid: &str) -> Option<&Page> {
-        for page in &self.pages {
-            if page.uid == uid {
-                return Some(&page);
+    pub fn get_viewed_page(&mut self) -> Option<&mut Page> {
+        match self.view.viewed_page {
+            SelectionType::Index { index } => self.pages.get_mut(index),
+            SelectionType::Uid { ref uid } => {
+                for page in self.pages.iter_mut() {
+                    if page.uid == *uid {
+                        return Some(page);
+                    }
+                }
+                println!("No viewed page found for uid {}", uid);
+                None
             }
         }
-        None
     }
 }
 impl Default for App {
@@ -55,16 +54,14 @@ impl Default for App {
             db: Database::default(),
             pages: vec![Page::default()],
             view: View {
-                viewed_page: SelectionType::UID {
-                    uid: "0".to_string()
+                viewed_page: SelectionType::Uid {
+                    uid: "0".to_string(),
                 },
-                focused: 0
             },
             area: Rect::default(),
         }
     }
 }
-
 
 fn main() {
     // setup
@@ -104,16 +101,24 @@ fn run_app(
     terminal.draw(|f| ui(f, &mut app)).unwrap();
     app.add_page(Page::generate_page(PageType::Result, app.area, "result1"));
     app.add_page(Page::generate_page(PageType::Edit, app.area, "edit1"));
+    app.view.viewed_page = SelectionType::Index { index: 0 };
     loop {
         terminal.draw(|frame| ui(frame, &mut app))?;
         if let Event::Key(key) = event::read().unwrap() {
             match key.code {
                 KeyCode::Char('q') => return Ok(()),
                 KeyCode::Char('e') => {
-                    app.view.focused = 0;
+                    app.view.viewed_page = SelectionType::Uid {
+                        uid: "edit1".to_string(),
+                    };
                 }
                 KeyCode::Char('r') => {
-                    app.view.focused = 1;
+                    app.view.viewed_page = SelectionType::Uid {
+                        uid: "result1".to_string(),
+                    };
+                }
+                KeyCode::Tab => {
+                    app.focus_next();
                 }
                 _ => {}
             }
@@ -123,7 +128,9 @@ fn run_app(
 
 fn ui(frame: &mut Frame, app: &mut App) {
     app.area = frame.area();
-    if let Some(page) = app.pages.get_mut(app.view.focused as usize) {
+    if let Some(page) = app.get_viewed_page() {
         page.render(frame);
+    } else {
+        println!("No page viewed");
     }
 }

@@ -9,12 +9,10 @@ pub enum PageType {
 
 pub struct Page {
     widgets: Vec<WidgetContainer>,
+    #[allow(dead_code)]
     page_type: PageType,
     focused_widget: usize,
     pub uid: String,
-    // TODO
-    // implement pages to use instead of widgetcontainers in the app
-    // yes yes
 }
 impl Default for Page {
     fn default() -> Self {
@@ -40,32 +38,33 @@ impl Page {
                     [Constraint::Length(3), Constraint::Min(3)].as_ref(),
                 )
                 .split(area);
-                let mut widgets: Vec<WidgetContainer> = Vec::new();
-                widgets.push(WidgetContainer {
-                    widget_type: WidgetType::Input {
-                        input: Input::default(),
+                let widgets: Vec<WidgetContainer> = vec![
+                    WidgetContainer {
+                        widget_type: WidgetType::Input {
+                            input: Input::default(),
+                        },
+                        area: layout[0],
+                        styling: Style::default(),
+                        borders: Borders::ALL,
+                        next: 1,
                     },
-                    area: layout[0],
-                    styling: Style::default(),
-                    borders: Borders::ALL,
-                    next: 1,
-                });
-                widgets.push(WidgetContainer {
-                    widget_type: WidgetType::List {
-                        selector: true,
-                        list: vec![],
+                    WidgetContainer {
+                        widget_type: WidgetType::List {
+                            selector: true,
+                            list: vec![],
+                        },
+                        area: layout[1],
+                        styling: Style::default(),
+                        borders: Borders::ALL,
+                        next: 0,
                     },
-                    area: layout[1],
-                    styling: Style::default(),
-                    borders: Borders::ALL,
-                    next: 0,
-                });
+                ];
 
                 Page {
                     widgets,
                     page_type,
                     focused_widget: 0,
-                    uid: random_string::generate(10, "abcdefghijklmnopqrstuvxyz"),
+                    uid: uid.to_string(),
                 }
             }
             PageType::Edit => {
@@ -80,36 +79,37 @@ impl Page {
                 )
                 .split(outer[1]);
 
-                let mut widgets: Vec<WidgetContainer> = Vec::new();
-                widgets.push(WidgetContainer {
-                    widget_type: WidgetType::Paragraph {
-                        text: "Edting".to_string(),
+                let widgets: Vec<WidgetContainer> = vec![
+                    WidgetContainer {
+                        widget_type: WidgetType::Paragraph {
+                            text: "Edting".to_string(),
+                        },
+                        area: outer[0],
+                        styling: Style::default(),
+                        borders: Borders::NONE,
+                        next: 0,
                     },
-                    area: outer[0],
-                    styling: Style::default(),
-                    borders: Borders::NONE,
-                    next: 0,
-                });
-                widgets.push(WidgetContainer {
-                    widget_type: WidgetType::List {
-                        selector: false,
-                        list: vec![],
+                    WidgetContainer {
+                        widget_type: WidgetType::List {
+                            selector: false,
+                            list: vec![],
+                        },
+                        area: inner[0],
+                        styling: Style::default(),
+                        borders: Borders::ALL,
+                        next: 1,
                     },
-                    area: inner[0],
-                    styling: Style::default(),
-                    borders: Borders::ALL,
-                    next: 1,
-                });
-                widgets.push(WidgetContainer {
-                    widget_type: WidgetType::List {
-                        selector: true,
-                        list: vec![],
+                    WidgetContainer {
+                        widget_type: WidgetType::List {
+                            selector: true,
+                            list: vec![],
+                        },
+                        area: inner[1],
+                        styling: Style::default(),
+                        borders: Borders::ALL,
+                        next: 2,
                     },
-                    area: inner[1],
-                    styling: Style::default(),
-                    borders: Borders::ALL,
-                    next: 2,
-                });
+                ];
                 Page {
                     widgets,
                     page_type,
@@ -125,6 +125,7 @@ impl Page {
             },
         }
     }
+    #[allow(dead_code)]
     pub fn add_widget(&mut self, widget: WidgetContainer) {
         self.widgets.push(widget);
     }
@@ -200,13 +201,8 @@ pub enum WidgetType {
 
 pub struct View {
     pub viewed_page: SelectionType,
-    pub focused: u32,
 }
 pub enum SelectionType {
-    Index {
-        index: usize
-    },
-    UID {
-        uid: String
-    }
+    Index { index: usize },
+    Uid { uid: String },
 }

@@ -2,5 +2,5 @@
 resolver = "2"
 members = [
   "lib/*",
-  "bin/cli", "bin/tui", "bin/tui_v2",
+  "bin/cli", "bin/tui_v2",
 ]

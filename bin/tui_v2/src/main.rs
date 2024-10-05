@@ -15,7 +15,8 @@ use ratatui::{
     widgets::*,
 };
 #[allow(unused_imports)]
-use tui_input::{backend::crossterm::EventHandler, Input};
+use tui_input::Input;
+use tui_input::backend::crossterm::EventHandler;
 
 struct App {
     #[allow(dead_code)]
@@ -90,7 +91,7 @@ fn main() {
             eprint!("App failed with:\n{}", err);
         }
     }
-    // todo!()
+    // TODO
     // keypress handling for each widget (based on focus)
     //
 }
@@ -102,9 +103,13 @@ fn run_app(
     app.add_page(Page::generate_page(PageType::Result, app.area, "result1"));
     app.add_page(Page::generate_page(PageType::Edit, app.area, "edit1"));
     app.view.viewed_page = SelectionType::Index { index: 0 };
+
+    let mut tmp: Input = Input::default();
+
     loop {
         terminal.draw(|frame| ui(frame, &mut app))?;
-        if let Event::Key(key) = event::read().unwrap() {
+        let event: Event = event::read()?;
+        if let Event::Key(key) = event {
             match key.code {
                 KeyCode::Char('q') => return Ok(()),
                 KeyCode::Char('e') => {
@@ -120,7 +125,9 @@ fn run_app(
                 KeyCode::Tab => {
                     app.focus_next();
                 }
-                _ => {}
+                _ => {
+                    todo!()
+                }
             }
         }
     }

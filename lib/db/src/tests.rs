@@ -390,7 +390,7 @@ mod namespaces_and_parents {
                 let mut conn = init_db();
                 let t_ids = tags::add_tags(vec!["a", "b"], &mut conn);
                 let _ = subtags::parent_tag(t_ids[0].unwrap(), t_ids[1].unwrap(), &conn);
-                subtags::remove_connection("a", "b", &conn).unwrap();
+                subtags::remove_connection(t_ids[0].unwrap(), t_ids[1].unwrap(), &conn).unwrap();
                 assert_eq!(utils::get_id("tags", "name='a'", &conn), t_ids[0]);
                 assert_eq!(utils::get_id("tags", "name='b'", &conn), t_ids[1]);
                 assert!(subtags::get_children(t_ids[0].unwrap(), &conn)
@@ -404,9 +404,11 @@ mod namespaces_and_parents {
             fn delete_connection_twice() {
                 let mut conn = init_db();
                 let t_ids = tags::add_tags(vec!["a", "b"], &mut conn);
+                let t1 = t_ids[0].unwrap();
+                let t2 = t_ids[1].unwrap();
                 let _ = subtags::parent_tag(t_ids[0].unwrap(), t_ids[1].unwrap(), &conn);
-                subtags::remove_connection("a", "b", &conn).unwrap();
-                subtags::remove_connection("a", "b", &conn).unwrap();
+                subtags::remove_connection(t1, t2, &conn).unwrap();
+                subtags::remove_connection(t1, t2, &conn).unwrap();
             }
         }
         mod getting {

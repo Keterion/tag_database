@@ -1,5 +1,10 @@
-use ratatui::{prelude::*, widgets::*};
+use ratatui::{
+    crossterm::event::{Event, KeyCode, KeyEvent},
+    prelude::*,
+    widgets::*,
+};
 use tui_input::Input;
+use tui_input::backend::crossterm::EventHandler;
 
 pub enum PageType {
     Result,
@@ -134,6 +139,9 @@ impl Page {
             widget.render(frame);
         }
     }
+    pub fn handle_keypress(&mut self, ev: Event) {
+        self.widgets[self.focused_widget].handle_keypress(ev);
+    }
 }
 pub struct WidgetContainer {
     widget_type: WidgetType,
@@ -191,6 +199,16 @@ impl WidgetContainer {
                 );
             }
         };
+    }
+    pub fn handle_keypress(&mut self, ev: Event) { //TODO
+        if let Event::Key(key) = ev {
+            match &mut self.widget_type {
+                WidgetType::Input { ref mut input } => {
+                    input.handle_event(&ev);
+                }
+                _ => {},
+            }
+        }
     }
 }
 pub enum WidgetType {

@@ -16,7 +16,6 @@ use ratatui::{
 };
 #[allow(unused_imports)]
 use tui_input::Input;
-use tui_input::backend::crossterm::EventHandler;
 
 struct App {
     #[allow(dead_code)]
@@ -46,6 +45,11 @@ impl App {
                 println!("No viewed page found for uid {}", uid);
                 None
             }
+        }
+    }
+    pub fn handle_event(&mut self, ev: Event) {
+        if let Some(page) = self.get_viewed_page() {
+            page.handle_keypress(ev);
         }
     }
 }
@@ -104,29 +108,33 @@ fn run_app(
     app.add_page(Page::generate_page(PageType::Edit, app.area, "edit1"));
     app.view.viewed_page = SelectionType::Index { index: 0 };
 
-    let mut tmp: Input = Input::default();
-
     loop {
         terminal.draw(|frame| ui(frame, &mut app))?;
         let event: Event = event::read()?;
         if let Event::Key(key) = event {
-            match key.code {
-                KeyCode::Char('q') => return Ok(()),
-                KeyCode::Char('e') => {
-                    app.view.viewed_page = SelectionType::Uid {
-                        uid: "edit1".to_string(),
-                    };
-                }
-                KeyCode::Char('r') => {
-                    app.view.viewed_page = SelectionType::Uid {
-                        uid: "result1".to_string(),
-                    };
-                }
-                KeyCode::Tab => {
-                    app.focus_next();
-                }
-                _ => {
-                    todo!()
+            if let Some(page) = app.get_viewed_page() {
+                if page.is_inserting() {
+                    page.handle_keypress(event);
+                } else {
+                    match key.code {
+                        KeyCode::Char('q') => return Ok(()),
+                        KeyCode::Char('e') => {
+                            app.view.viewed_page = SelectionType::Uid {
+                                uid: "edit1".to_string(),
+                            };
+                        }
+                        KeyCode::Char('r') => {
+                            app.view.viewed_page = SelectionType::Uid {
+                                uid: "result1".to_string(),
+                            };
+                        }
+                        KeyCode::Tab => {
+                            app.focus_next();
+                        }
+                        _ => {
+                            app.handle_event(event);
+                        }
+                    }
                 }
             }
         }

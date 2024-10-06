@@ -1,10 +1,10 @@
 use ratatui::{
-    crossterm::event::{Event, KeyCode, KeyEvent},
+    crossterm::event::{Event, KeyCode},
     prelude::*,
     widgets::*,
 };
-use tui_input::Input;
 use tui_input::backend::crossterm::EventHandler;
+use tui_input::Input;
 
 pub enum PageType {
     Result,
@@ -31,8 +31,12 @@ impl Default for Page {
 }
 impl Page {
     pub fn focus_next(&mut self) {
-        if let Some(page) = self.widgets.get(self.focused_widget) {
-            self.focused_widget = page.next;
+        if let Some(widget) = self.get_focused_widget_mut() {
+            widget.unfocus();
+            self.focused_widget = widget.next;
+        }
+        if let Some(widget) = self.get_focused_widget_mut() {
+            widget.focus();
         }
     }
     pub fn generate_page(page_type: PageType, area: Rect, uid: &str) -> Self {
@@ -47,11 +51,13 @@ impl Page {
                     WidgetContainer {
                         widget_type: WidgetType::Input {
                             input: Input::default(),
+                            inserting: false,
                         },
                         area: layout[0],
                         styling: Style::default(),
                         borders: Borders::ALL,
                         next: 1,
+                        focused: true,
                     },
                     WidgetContainer {
                         widget_type: WidgetType::List {
@@ -62,6 +68,7 @@ impl Page {
                         styling: Style::default(),
                         borders: Borders::ALL,
                         next: 0,
+                        focused: false,
                     },
                 ];
 
@@ -92,7 +99,8 @@ impl Page {
                         area: outer[0],
                         styling: Style::default(),
                         borders: Borders::NONE,
-                        next: 0,
+                        next: 1,
+                        focused: true,
                     },
                     WidgetContainer {
                         widget_type: WidgetType::List {
@@ -102,7 +110,8 @@ impl Page {
                         area: inner[0],
                         styling: Style::default(),
                         borders: Borders::ALL,
-                        next: 1,
+                        next: 2,
+                        focused: false,
                     },
                     WidgetContainer {
                         widget_type: WidgetType::List {
@@ -112,13 +121,14 @@ impl Page {
                         area: inner[1],
                         styling: Style::default(),
                         borders: Borders::ALL,
-                        next: 2,
+                        next: 1,
+                        focused: false,
                     },
                 ];
                 Page {
                     widgets,
                     page_type,
-                    focused_widget: 2,
+                    focused_widget: 0,
                     uid: uid.to_string(),
                 }
             }
@@ -140,7 +150,23 @@ impl Page {
         }
     }
     pub fn handle_keypress(&mut self, ev: Event) {
-        self.widgets[self.focused_widget].handle_keypress(ev);
+        if let Some(widget) = self.get_focused_widget_mut() {
+            widget.handle_keypress(ev);
+        }
+    }
+    pub fn is_inserting(&self) -> bool {
+        if let Some(widget) = self.get_focused_widget() {
+            if let WidgetType::Input { inserting, .. } = widget.widget_type {
+                return inserting;
+            }
+        }
+        false
+    }
+    fn get_focused_widget(&self) -> Option<&WidgetContainer> {
+        self.widgets.get(self.focused_widget)
+    }
+    fn get_focused_widget_mut(&mut self) -> Option<&mut WidgetContainer> {
+        self.widgets.get_mut(self.focused_widget)
     }
 }
 pub struct WidgetContainer {
@@ -149,6 +175,7 @@ pub struct WidgetContainer {
     styling: Style,
     borders: Borders,
     next: usize,
+    focused: bool,
 }
 impl Default for WidgetContainer {
     fn default() -> Self {
@@ -160,6 +187,7 @@ impl Default for WidgetContainer {
             styling: Style::default(),
             borders: Borders::NONE,
             next: 0,
+            focused: false,
         }
     }
 }
@@ -190,7 +218,7 @@ impl WidgetContainer {
                     )
                 }
             }
-            WidgetType::Input { ref input } => {
+            WidgetType::Input { ref input, .. } => {
                 frame.render_widget(
                     Paragraph::new(input.value())
                         .block(Block::default().borders(self.borders))
@@ -200,19 +228,47 @@ impl WidgetContainer {
             }
         };
     }
-    pub fn handle_keypress(&mut self, ev: Event) { //TODO
+    pub fn handle_keypress(&mut self, ev: Event) {
+        //TODO
         if let Event::Key(key) = ev {
             match &mut self.widget_type {
-                WidgetType::Input { ref mut input } => {
-                    input.handle_event(&ev);
-                }
-                _ => {},
+                WidgetType::Input {
+                    ref mut input,
+                    ref mut inserting,
+                } => match key.code {
+                    KeyCode::Char('i') => {
+                        if !*inserting {
+                            *inserting = true;
+                            self.styling = self.styling.gray();
+                        } else {
+                            input.handle_event(&ev);
+                        };
+                    }
+                    KeyCode::Esc => {
+                        *inserting = false;
+                        self.styling = self.styling.yellow();
+                    }
+                    _ => {
+                        if *inserting {
+                            input.handle_event(&ev);
+                        }
+                    }
+                },
+                _ => {} // not input widget
             }
         }
     }
+    pub fn focus(&mut self) {
+        self.styling = self.styling.yellow();
+        self.focused = true;
+    }
+    pub fn unfocus(&mut self) {
+        self.styling = self.styling.white();
+        self.focused = false;
+    }
 }
 pub enum WidgetType {
-    Input { input: Input },
+    Input { input: Input, inserting: bool },
     Paragraph { text: String },
     List { selector: bool, list: Vec<String> },
 }
